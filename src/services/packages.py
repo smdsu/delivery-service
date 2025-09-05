@@ -13,6 +13,7 @@ from src.schemas.package import (
     PaginatedPackages,
 )
 from src.models.package import Package
+from .rabbitmq_producer import rabbitmq_producer
 
 
 logger = logging.getLogger(__name__)
@@ -24,8 +25,9 @@ class PackageService:
     ) -> PackageCreateResponse:
         # Note: In production we would publish to RabbitMQ here instead of direct DB writes
         logger.info("Registering package for session %s", session_uid)
+        package_id = uuid.uuid4()
         new_package = Package(
-            id=uuid.uuid4(),
+            id=package_id,
             name=data.name,
             type_id=data.type_id,
             weight=data.weight,
@@ -35,6 +37,20 @@ class PackageService:
         )
 
         try:
+            new_package_dict = data.model_dump()
+            new_package_dict["id"] = str(package_id)
+            new_package_dict["value_of_contents_usd"] = str(data.value_of_contents_usd)
+
+            success = await rabbitmq_producer.publish_with_confirmation(
+                new_package_dict
+            )
+
+            if not success:
+                logger.error(f"Failed to send package {package_id} to the queue")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Service temporarily unavailable. Please try again later.",
+                )
             async for session in get_session():
                 await PackagesCRUD.create(session, new_package)
                 await session.commit()
