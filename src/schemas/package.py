@@ -32,5 +32,17 @@ class PackageRead(PackageBase):
     id: UUID
 
 
+class PackageDetailRead(PackageRead):
+    type_name: str
+    package_delivery_cost_rub: Optional[Decimal] = None
+
+
+class PaginatedPackages(BaseModel):
+    items: list[PackageDetailRead]
+    total: int
+    page: int
+    size: int
+
+
 class PackageCreateResponse(BaseModel):
     id: UUID
