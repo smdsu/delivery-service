@@ -1,3 +1,4 @@
+from decimal import Decimal
 import httpx
 import logging
 import datetime
@@ -21,7 +22,7 @@ class CurrencyService:
             seconds=self.cache_duration
         )
 
-    async def get_usd_rate(self) -> float:
+    async def get_usd_rate(self) -> Decimal:
         now = datetime.datetime.now()
         async with self.cache_lock:
             try:
@@ -34,7 +35,7 @@ class CurrencyService:
                     )
                     response.raise_for_status()
                     data = response.json()
-                self.chached_rate = data["Valute"]["USD"]["Value"]
+                self.chached_rate = Decimal(data["Valute"]["USD"]["Value"])  # type: ignore
                 self.cache_time = now
                 return self.chached_rate  # type: ignore
             except Exception as e:
