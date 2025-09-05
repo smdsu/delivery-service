@@ -12,7 +12,6 @@ class PackageBase(BaseModel):
     type_id: int
     weight: float
     value_of_contents_usd: Decimal
-    package_delivery_cost_rub: Optional[Decimal] = None
 
 
 class PackageCreate(PackageBase):
@@ -30,4 +29,8 @@ class PackageUpdate(BaseModel):
 class PackageRead(PackageBase):
     model_config = ConfigDict(from_attributes=True)
 
+    id: UUID
+
+
+class PackageCreateResponse(BaseModel):
     id: UUID
