@@ -40,15 +40,22 @@ class PackageConsumer:
             self.queue = await self.channel.declare_queue(
                 name="package_processing",
                 durable=True,
+                arguments={
+                    "x-message-ttl": 3600000,  # 1 hour
+                    "x-dead-letter-exchange": "packages_dlx",
+                    "x-dead-letter-routing-key": "failed_packages",
+                },
             )
         except Exception as e:
             logger.error(f"Error connecting to RabbitMQ: {e}")
             raise
 
     def calculate_delivery_cost(
-        self, weight: float, content_value_usd: float, usd_rate: float
+        self, weight: float, value_of_contents_usd: Decimal, usd_rate: Decimal
     ) -> Decimal:
-        base_cost_usd = weight * 0.5 + content_value_usd * 0.01
+        base_cost_usd = Decimal(weight * 0.5) + Decimal(
+            value_of_contents_usd
+        ) * Decimal(0.01)
         delivery_cost_rub: Decimal = Decimal(base_cost_usd * usd_rate)
 
         return delivery_cost_rub
@@ -60,8 +67,10 @@ class PackageConsumer:
             usd_rate = await currency_service.get_usd_rate()
 
             delivery_cost = self.calculate_delivery_cost(
-                weight=message_data["weight"],
-                content_value_usd=float(message_data["content_value_usd"]),
+                weight=float(message_data["weight"]),
+                value_of_contents_usd=Decimal(
+                    str(message_data["value_of_contents_usd"])
+                ),
                 usd_rate=usd_rate,
             )
             updated_package = await package_worker_service.update_package_delivery_cost(
@@ -85,7 +94,7 @@ class PackageConsumer:
             return False
 
     async def handle_message(self, message: aio_pika.IncomingMessage):
-        async with message.process(requeue=True):
+        async with message.process(requeue=False):
             try:
                 message_data = json.loads(message.body.decode("utf-8"))
                 package_id = message_data["id"]
@@ -113,9 +122,24 @@ class PackageConsumer:
                         f"retry {retry_count + 1}/{self.max_retries}"
                     )
 
+                    new_headers = dict(message.headers) if message.headers else {}
+                    new_headers["retry_count"] = retry_count + 1
+
                     await asyncio.sleep(self.retry_delay * (retry_count + 1))
 
-                    raise aio_pika.exceptions.MessageProcessError("Retry needed")
+                    await self.channel.default_exchange.publish(  # type: ignore
+                        aio_pika.Message(
+                            body=message.body,
+                            headers=new_headers,
+                            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                            priority=1,
+                            message_id=package_id,
+                            expiration=3600000,  # 1 hour
+                        ),
+                        routing_key=self.queue.name,  # type: ignore
+                    )
+
+                    return True
             except json.JSONDecodeError as e:
                 logger.error(f"JSON decode error: {e}")
                 return False
