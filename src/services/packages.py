@@ -34,9 +34,20 @@ class PackageService:
             user_session_uid=session_uid,
         )
 
-        async for session in get_session():
-            await PackagesCRUD.create(session, new_package)
-            await session.commit()
+        try:
+            async for session in get_session():
+                await PackagesCRUD.create(session, new_package)
+                await session.commit()
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+        except RuntimeError:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Database operation failed",
+            )
 
         return PackageCreateResponse(id=new_package.id)
 
