@@ -11,7 +11,7 @@ class PackageBase(BaseModel):
     name: str
     type_id: int
     weight: float
-    value_of_contents_usd: Optional[Decimal] = None
+    value_of_contents_usd: Decimal
     package_delivery_cost_rub: Optional[Decimal] = None
 
 
