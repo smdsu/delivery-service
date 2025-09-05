@@ -1,3 +1,4 @@
+import datetime
 import logging
 import json
 from typing import Optional, Dict, Any
@@ -112,7 +113,7 @@ class RabbitMQProducer:
                 headers={
                     "content_type": "application/json",
                     "package_id": package_data["id"],
-                    "created_at": package_data["created_at"],
+                    "created_at": datetime.datetime.now(),
                     "retry_count": 0,
                 },
                 priority=1,
