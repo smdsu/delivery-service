@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Optional, Sequence
 from uuid import UUID
 
@@ -69,3 +70,21 @@ class PackagesCRUD:
         fetched = result.all()
         rows: list[tuple[Package, PackageType]] = [(row[0], row[1]) for row in fetched]
         return rows, int(total)
+
+    @staticmethod
+    async def update_delivery_cost(
+        session: AsyncSession, package_id: UUID, delivery_cost: Decimal
+    ) -> Optional[Package]:
+        try:
+            stmt = select(Package).where(Package.id == package_id)
+            result = await session.execute(stmt)
+            package = result.scalar_one_or_none()
+
+            if package is None:
+                return None
+
+            package.package_delivery_cost_rub = delivery_cost
+            await session.flush()
+            return package
+        except SQLAlchemyError as e:
+            raise RuntimeError("Failed to update delivery cost") from e
