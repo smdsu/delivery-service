@@ -1,5 +1,6 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING
+import uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy import String, Float, ForeignKey, DECIMAL
@@ -12,7 +13,9 @@ if TYPE_CHECKING:
 
 
 class Package(Base):
-    id: Mapped[PgUUID] = mapped_column(PgUUID, primary_key=True, as_uuid=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     type_id: Mapped[int] = mapped_column(ForeignKey("packagetypes.id"))
     weight: Mapped[float] = mapped_column(Float, nullable=False)
