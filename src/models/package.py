@@ -21,5 +21,8 @@ class Package(Base):
     weight: Mapped[float] = mapped_column(Float, nullable=False)
     value_of_contents_usd: Mapped[Decimal] = mapped_column(DECIMAL(10, 2))
     package_delivery_cost_rub: Mapped[Decimal] = mapped_column(DECIMAL(10, 2))
+    user_session_uid: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), default=uuid.uuid4
+    )
 
     type: Mapped["PackageType"] = relationship(back_populates="packages")
