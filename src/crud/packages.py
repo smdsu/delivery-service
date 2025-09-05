@@ -2,7 +2,9 @@ from typing import Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import Select, and_, func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from src.models.package import Package
 from src.models.package_types import PackageType
@@ -11,9 +13,14 @@ from src.models.package_types import PackageType
 class PackagesCRUD:
     @staticmethod
     async def create(session: AsyncSession, package: Package) -> Package:
-        session.add(package)
-        await session.flush()
-        return package
+        try:
+            session.add(package)
+            await session.flush()
+            return package
+        except IntegrityError as e:
+            raise ValueError("Invalid package data: constraint violation") from e
+        except SQLAlchemyError as e:
+            raise RuntimeError("Database operation failed") from e
 
     @staticmethod
     async def get_by_id_for_session(
@@ -24,7 +31,7 @@ class PackagesCRUD:
             .where(
                 and_(Package.id == package_id, Package.user_session_uid == session_uid)
             )
-            .options()
+            .options(selectinload(Package.type))
         )
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
