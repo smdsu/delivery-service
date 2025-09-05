@@ -7,6 +7,8 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data/
+    networks:
+      - app-network
     logging:
       driver: "json-file"
       options:
@@ -32,6 +34,20 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    hostname: rabbitmq
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "5672:5672"     # AMQP порт
+      - "15672:15672"   # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+
   app:
     build:
       context: .
@@ -45,6 +61,8 @@ services:
         condition: service_healthy
     environment:
       - POSTGRES_HOST=postgres
+    networks:
+      - app-network
     cpus: "0.50"
     mem_limit: 512m
     mem_reservation: 256m
@@ -58,3 +76,10 @@ services:
 
 volumes:
   pgdata:
+
+  rabbitmq_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
