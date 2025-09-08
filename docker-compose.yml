@@ -1,0 +1,115 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres_db
+    env_file: .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data/
+    networks:
+      - app-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    cpus: "0.50"
+    mem_limit: 512m
+    mem_reservation: 256m
+    command: >
+      postgres -c max_connections=100
+              -c shared_buffers=256MB
+              -c effective_cache_size=512MB
+              -c maintenance_work_mem=64MB
+              -c checkpoint_completion_target=0.7
+              -c wal_buffers=16MB
+              -c default_statistics_target=100
+              -c work_mem=8MB
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U your_username -d your_db_name" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    hostname: rabbitmq
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "5672:5672"     # AMQP порт
+      - "15672:15672"   # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - POSTGRES_HOST=postgres
+    networks:
+      - app-network
+    cpus: "0.50"
+    mem_limit: 512m
+    mem_reservation: 256m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  packages_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: python -c "from workers.package_consumer import main; import asyncio; asyncio.run(main())"
+    env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - PYTHONPATH=/app
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    cpus: "0.25"
+    mem_limit: 256m
+    mem_reservation: 128m
+    deploy:
+      replicas: 1
+volumes:
+  pgdata:
+
+  rabbitmq_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
